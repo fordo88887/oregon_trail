@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oregon Trail Lite - Wide</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-wrapper">
+        <header id="main-header">
+            <h1>Oregon Trail Lite</h1>
+            <div id="header-status">
+                <span>Date: <span id="current-date-header">--</span></span>
+                <span>Money: $<span id="party-money-header">0.00</span></span>
+                <span>Location: <span id="current-location-header">--</span></span>
+            </div>
+        </header>
+
+        <div id="game-layout">
+            <!-- Left Panel: Party Roster / Character Details -->
+            <aside id="left-panel">
+                <h2>Party Roster</h2>
+                <div id="party-roster-condensed">
+                    <p>Draft your party!</p>
+                </div>
+                <hr>
+                <h2>Character Details</h2>
+                <div id="character-detail-view">
+                    <p>Select a party member to see details.</p>
+                </div>
+            </aside>
+
+            <!-- Main Content Area: Tabs -->
+            <main id="main-content">
+                <nav id="tabs">
+                    <button class="tab-button active" data-tab="setup" id="setup-tab-button">Setup</button>
+                    <button class="tab-button" data-tab="status">Status</button>
+                    <button class="tab-button" data-tab="inventory">Inventory</button>
+                    <button class="tab-button" data-tab="map">Map</button>
+                </nav>
+
+                <div id="tab-content">
+                    <!-- Setup Tab (Initially active) -->
+                    <div class="tab-pane active" id="tab-setup">
+                        <h2>Game Setup</h2>
+                        <section id="available-draftees-section">
+                            <h3>Available Draftees (Choose up to <span id="max-party-size-display">4</span>)</h3>
+                            <button id="generate-draftees-button">Generate New Draftees (3)</button>
+                            <div id="draftee-pool" class="character-list-setup"></div>
+                        </section>
+                        <section id="initial-supplies-section">
+                             <h3>Buy Initial Supplies</h3>
+                             <div class="money-display-setup">
+                                Current Money: $<span id="party-money-setup-display">0.00</span>
+                             </div>
+                             <div id="initial-supply-store"></div>
+                        </section>
+                        <button id="start-journey-button" disabled>Finalize Party & Start Journey!</button>
+                    </div>
+
+                    <!-- Status Tab -->
+                    <div class="tab-pane" id="tab-status">
+                        <h2>Trail Status & Actions</h2>
+                        <div id="status-overview">
+                            <p>Next Landmark: <strong id="next-landmark-name">--</strong> (<span id="distance-to-next">--</span> miles)</p>
+                            <!-- <p>Pace: <span id="current-pace">Normal</span> | Rations: <span id="current-rations">Normal</span></p> -->
+                        </div>
+                        <div id="travel-actions">
+                            <button id="travel-day-button">Travel Day</button>
+                            <button id="rest-day-button">Rest Day</button>
+                        </div>
+                        <div id="landmark-specific-actions" class="hidden">
+                            <button id="visit-store-button">Visit Store</button>
+                            <!-- Other landmark actions -->
+                        </div>
+                         <div id="event-choices-area" class="hidden">
+                            <!-- Dynamic event choices here -->
+                        </div>
+                        <h3>Journey Log</h3>
+                        <div id="game-log">
+                             <p>Welcome! Assemble your party and prepare for the journey.</p>
+                        </div>
+                    </div>
+
+                    <!-- Inventory Tab -->
+                    <div class="tab-pane" id="tab-inventory">
+                        <h2>Party Inventory</h2>
+                        <div id="party-inventory-detailed">
+                            <p>Your wagon is empty.</p>
+                        </div>
+                    </div>
+
+                    <!-- Map Tab -->
+                    <div class="tab-pane" id="tab-map">
+                        <h2>Oregon Trail Map</h2>
+                        <div id="trail-map-visualization">
+                            <ul id="map-landmark-list"></ul>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+        </div> <!-- End game-layout -->
+
+        <div id="modal-overlay" class="hidden">
+            <div id="modal-content-wrapper"> <!-- Added wrapper for easier centering -->
+                <div id="modal-main-content">
+                    <span id="modal-close-button">&times;</span>
+                    <h3 id="modal-title">Modal Title</h3>
+                    <div id="modal-body">
+                        <p>Modal content goes here.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div> <!-- End game-wrapper -->
+    <script src="script.js"></script>
+</body>
+</html>

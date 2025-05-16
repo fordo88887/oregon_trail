@@ -1,0 +1,280 @@
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #e8e4d9;
+    color: #3a2d22;
+    margin: 0;
+    line-height: 1.6;
+    font-size: 16px; /* Base font size */
+}
+
+#game-wrapper {
+    max-width: 1600px;
+    min-width: 900px; /* Minimum width for the layout to make sense */
+    margin: 0 auto;
+    background-color: #f4f1e9;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 0 15px rgba(0,0,0,0.2);
+}
+
+/* Header */
+#main-header {
+    background-color: #8c6e54;
+    color: #fff;
+    padding: 10px 20px;
+    text-align: center;
+    border-bottom: 4px solid #5a3d2b;
+    position: sticky; /* Keep header visible on scroll */
+    top: 0;
+    z-index: 100;
+}
+#main-header h1 {
+    margin: 0 0 8px 0;
+    font-size: 1.8em;
+    font-weight: 500;
+}
+#header-status {
+    display: flex;
+    justify-content: space-around;
+    font-size: 0.85em;
+}
+#header-status span { margin: 0 10px; }
+
+/* Main Game Layout */
+#game-layout {
+    display: flex;
+    flex-grow: 1;
+    padding: 15px;
+    gap: 15px;
+    overflow: hidden; /* Prevent wrapper from growing due to large content */
+}
+
+#left-panel {
+    width: 280px; /* Slightly narrower */
+    flex-shrink: 0; /* Prevent shrinking */
+    background-color: #fdfaf6;
+    padding: 15px;
+    border: 1px solid #d3c1af;
+    border-radius: 5px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+#left-panel h2 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #5a3d2b;
+    font-size: 1.2em;
+    border-bottom: 1px solid #d3c1af;
+    padding-bottom: 5px;
+}
+
+#main-content {
+    flex-grow: 1;
+    background-color: #fdfaf6;
+    padding: 15px;
+    border: 1px solid #d3c1af;
+    border-radius: 5px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto; /* Scroll main content if it overflows */
+}
+
+/* Tabs */
+#tabs {
+    display: flex;
+    border-bottom: 2px solid #8c6e54;
+    margin-bottom: 15px;
+    flex-shrink: 0;
+}
+.tab-button {
+    padding: 8px 15px;
+    cursor: pointer;
+    border: none;
+    background-color: transparent;
+    font-size: 1em;
+    color: #7a5e4b;
+    border-bottom: 3px solid transparent;
+    margin-right: 5px;
+    transition: color 0.2s, border-bottom-color 0.2s;
+}
+.tab-button.active {
+    color: #5a3d2b;
+    font-weight: bold;
+    border-bottom-color: #5a3d2b;
+}
+.tab-button:hover {
+    color: #5a3d2b;
+}
+.tab-button.hidden { display: none; }
+
+
+.tab-pane {
+    display: none;
+    flex-grow: 1; /* Allow pane to fill space if content is small */
+    animation: fadeIn 0.3s ease-out;
+}
+.tab-pane.active {
+    display: block;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Setup Phase Specifics */
+#tab-setup h2, #tab-setup h3 { color: #5a3d2b; margin-top: 15px; font-size: 1.1em; }
+.character-list-setup {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 12px;
+    margin-top: 10px;
+}
+.character-card {
+    border: 1px solid #c8b7a6;
+    border-radius: 4px;
+    padding: 12px;
+    background-color: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    cursor: default;
+    transition: box-shadow 0.2s;
+}
+.character-card:hover { box-shadow: 0 2px 5px rgba(0,0,0,0.12); }
+.character-card .name { font-weight: bold; font-size: 1.05em; color: #5a3d2b; margin-bottom: 5px;}
+.character-card p { margin: 4px 0; font-size: 0.85em; }
+.traits-list, .debuffs-list { list-style-type: none; padding-left: 0; margin-top: 5px; font-size: 0.8em; }
+.traits-list li { color: #28a745; } .traits-list li::before { content: "+ "; font-weight: bold; }
+.debuffs-list li { color: #dc3545; } .debuffs-list li::before { content: "- "; font-weight: bold; }
+.character-card button { margin-top: 8px; }
+
+#initial-supply-store .supply-item {
+     display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px dotted #d3c1af;
+}
+#initial-supply-store .supply-item:last-child { border-bottom: none; }
+#initial-supply-store .supply-info { flex-grow: 1; font-size: 0.9em; }
+#initial-supply-store .supply-actions { display: flex; align-items: center; gap: 8px; }
+#initial-supply-store input[type="number"] { width: 50px; padding: 5px; text-align: center; border: 1px solid #ccc; border-radius: 3px;}
+.money-display-setup { font-weight: bold; margin: 10px 0; text-align: right; }
+
+
+/* Left Panel - Party Roster */
+#party-roster-condensed .party-member-summary {
+    padding: 8px;
+    margin-bottom: 8px;
+    border: 1px solid #d3c1af;
+    border-radius: 3px;
+    cursor: pointer;
+    background-color: #fff;
+    transition: background-color 0.2s;
+}
+#party-roster-condensed .party-member-summary:hover { background-color: #e8e4dd; }
+#party-roster-condensed .party-member-summary.selected { background-color: #d4c8bc; border-left: 3px solid #8c6e54; }
+#party-roster-condensed .party-member-summary p { margin: 2px 0; font-size: 0.85em;}
+#party-roster-condensed .party-member-summary .name { font-weight: bold; font-size: 0.95em; }
+#party-roster-condensed .status-bar {
+    height: 6px; background-color: #e0e0e0; border-radius: 3px; margin-top: 4px;
+    overflow: hidden;
+}
+#party-roster-condensed .status-bar div { height: 100%; border-radius: 3px; transition: width 0.3s ease-out; }
+#party-roster-condensed .health-fill { background-color: #c0392b; } /* Darker Red */
+#party-roster-condensed .energy-fill { background-color: #f39c12; } /* Orange */
+#party-roster-condensed .hygiene-fill { background-color: #2980b9; } /* Darker Blue */
+
+
+#character-detail-view { padding: 10px 0; border-top: 1px solid #d3c1af; margin-top: 10px; font-size: 0.9em; }
+#character-detail-view h4 { margin-top:0; margin-bottom: 8px; font-size: 1.1em; }
+#character-detail-view h5 { margin-top: 10px; margin-bottom: 3px; font-size: 0.95em; color: #7a5e4b; }
+#character-detail-view p { margin: 3px 0; }
+
+/* General Button Style */
+button {
+    background-color: #7a5e4b; color: white; border: none; padding: 8px 12px;
+    border-radius: 4px; cursor: pointer; font-size: 0.9em; transition: background-color 0.2s;
+    margin-right: 8px; margin-bottom: 8px;
+}
+button:hover { background-color: #5a3d2b; }
+button:disabled { background-color: #c8b7a6 !important; color: #888 !important; cursor: not-allowed !important; }
+
+
+/* Status Tab */
+#status-overview { margin-bottom: 15px; }
+#status-overview p { margin: 5px 0; font-size: 1em; }
+#travel-actions, #landmark-specific-actions, #event-choices-area { margin-bottom: 15px; }
+#landmark-specific-actions button { background-color: #5cb85c; }
+#landmark-specific-actions button:hover { background-color: #4cae4c; }
+
+#game-log {
+    max-height: 350px; /* More space for log */
+    overflow-y: auto;
+    border: 1px solid #d3c1af;
+    padding: 12px;
+    font-size: 0.85em;
+    background-color: #fff;
+    margin-top: 15px;
+    border-radius: 3px;
+}
+#game-log p { margin: 0 0 6px 0; border-bottom: 1px dashed #eee; padding-bottom: 4px; line-height: 1.4; }
+#game-log p:last-child { border-bottom: none; margin-bottom: 0; }
+#game-log p.complaint { color: #d9534f; font-style: italic; }
+#game-log p.sickness { color: #f0ad4e; }
+#game-log p.death { color: #333; font-weight: bold; }
+#game-log p.landmark { color: #0275d8; font-weight: bold;}
+#game-log p.event { color: #5bc0de; } /* General event */
+#game-log p.event_title { font-weight: bold; color: #4682B4; }
+#game-log p.event_positive { color: #2E8B57; }
+#game-log p.event_negative { color: #B22222; }
+#game-log p.victory { color: green; font-weight: bold; font-size: 1.1em;}
+#game-log p.gameover { color: darkred; font-weight: bold; font-size: 1.1em;}
+
+
+/* Inventory Tab */
+#party-inventory-detailed ul { list-style-type: none; padding: 0; }
+#party-inventory-detailed li { padding: 6px 0; border-bottom: 1px dotted #d3c1af; font-size: 0.95em; }
+#party-inventory-detailed li:last-child { border-bottom: none; }
+
+/* Map Tab */
+#map-landmark-list { list-style-type: none; padding: 0; }
+#map-landmark-list li { padding: 6px; margin-bottom: 4px; border-radius: 3px; background-color: #fff; border: 1px solid #eee;}
+#map-landmark-list .current-location { font-weight: bold; background-color: #d4c8bc; border-left: 3px solid #8c6e54;}
+#map-landmark-list .visited-location { color: #777; background-color: #f9f9f9; }
+
+
+/* Modal */
+#modal-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    display: flex; justify-content: center; align-items: center;
+    z-index: 1000;
+    padding: 20px; /* Padding for smaller screens so modal isn't edge-to-edge */
+    box-sizing: border-box;
+}
+#modal-content-wrapper{ /* New wrapper for better centering and max width */
+    background-color: #fdfaf6;
+    padding: 20px 25px;
+    border-radius: 5px;
+    min-width: 320px; /* Minimum width */
+    width: auto; /* Auto width based on content */
+    max-width: 650px; /* Max width for larger content */
+    max-height: 90vh; /* Max height */
+    overflow-y: auto;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    position: relative; /* For close button positioning */
+}
+#modal-main-content {} /* Inner content if needed, or style modal-content-wrapper directly */
+
+#modal-close-button {
+    position: absolute; top: 10px; right: 15px; font-size: 1.6em;
+    cursor: pointer; color: #aaa; line-height: 1;
+}
+#modal-close-button:hover { color: #333; }
+#modal-title { margin-top: 0; margin-bottom: 15px; color: #5a3d2b; font-size: 1.3em;}
+#modal-body .supply-item {
+    display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px dotted #d3c1af;
+}
+#modal-body .supply-item:last-child { border-bottom: none; }
+#modal-body .supply-info { flex-grow: 1; font-size: 0.9em; }
+#modal-body .supply-actions { display: flex; align-items: center; gap: 8px; }
+#modal-body input[type="number"] { width: 50px; padding: 5px; text-align: center; border: 1px solid #ccc; border-radius: 3px;}
+#modal-body .money-display { font-weight: bold; margin: 10px 0; text-align: right; font-size: 0.9em; }
+#modal-body #fort-store-message { margin-top:10px; font-size:0.9em; color:green; text-align: center; }
+
+
+.hidden { display: none !important; }

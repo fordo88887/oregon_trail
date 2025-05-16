@@ -14,6 +14,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const HYGIENE_LOSS_PER_DAY = 7;
     const ENERGY_RECOVERY_PER_REST_DAY = 25;
     const HEALTH_RECOVERY_PER_REST_DAY = 8;
+    const TIME_FOR_BATHROOM_BREAK = 0.1; // Not directly used as day fraction, more as a concept
+    const COMPLAINT_BASE_CHANCE = 0.55;
 
     // --- DATA POOLS ---
     const MALE_FIRST_NAMES = ["John", "William", "James", "Robert", "Michael", "David", "Richard", "Joseph", "Thomas", "Charles", "Daniel", "Matthew"];
@@ -97,10 +99,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     const TRAIL_MAP = [
-        { name: "Independence, Missouri", distanceToNext: 102, type: "town", services: ["shop_basic"], description: "The starting point of your long journey west!" },
-        { name: "Kansas River Crossing", distanceToNext: 83, type: "river_crossing", description: "A wide river, often tricky to cross." },
-        { name: "Big Blue River Crossing", distanceToNext: 119, type: "river_crossing", description: "Another significant water obstacle." },
-        { name: "Fort Kearny", distanceToNext: 200, type: "fort", services: ["shop_limited", "rest"], description: "A key army post and supply point on the trail." },
+        { name: "Independence, Missouri", distanceToNext: 102, type: "town", services: ["shop_basic"], description: "The starting point!" },
+        { name: "Kansas River Crossing", distanceToNext: 83, type: "river_crossing", depth: () => getRandomInt(2, 5), width: 600, ferryCost: 5.00, description: "A wide river, often tricky to cross." },
+        { name: "Big Blue River Crossing", distanceToNext: 119, type: "river_crossing", depth: () => getRandomInt(3, 6), width: 400, ferryCost: 3.00, description: "Another significant water obstacle." },
+        { name: "Fort Kearny", distanceToNext: 200, type: "fort", services: ["shop_limited", "rest"], description: "A key army post." },
         { name: "Chimney Rock", distanceToNext: 86, type: "natural_landmark", description: "A famous, needle-like rock formation." },
         { name: "Fort Laramie", distanceToNext: 190, type: "fort", services: ["shop_limited", "rest"], description: "An important fur trading post and later a military fort." },
         { name: "Independence Rock", distanceToNext: 100, type: "natural_landmark", description: "A massive granite rock where many pioneers carved their names." },
@@ -108,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
         { name: "Fort Bridger", distanceToNext: 150, type: "fort", services: ["shop_limited", "rest"], description: "A supply post established by mountain man Jim Bridger." },
         { name: "Soda Springs", distanceToNext: 140, type: "natural_landmark", description: "Known for its naturally carbonated water springs." },
         { name: "Fort Hall", distanceToNext: 57, type: "fort", services: ["shop_limited", "rest"], description: "A significant stop before the trail splits." },
-        { name: "Snake River Crossing", distanceToNext: 180, type: "river_crossing", description: "A dangerous and difficult river to ford." },
+        { name: "Snake River Crossing", distanceToNext: 180, type: "river_crossing", depth: () => getRandomInt(4, 8), width: 1000, ferryCost: 10.00, description: "A dangerous and difficult river to ford." },
         { name: "Fort Boise", distanceToNext: 113, type: "fort", services: ["shop_very_limited", "rest"], description: "A Hudson's Bay Company post in present-day Idaho." },
         { name: "Blue Mountains Crossing", distanceToNext: 160, type: "mountain_range", description: "A rugged mountain range to traverse." },
         { name: "The Dalles", distanceToNext: 100, type: "town", services: ["shop_basic", "rest"], description: "A key trading center on the Columbia River." },
@@ -141,6 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let complaintCooldown = 0;
     let selectedCharacterId = null;
     let activeEvent = null;
+    let currentRiverCrossing = null;
 
     // --- DOM ELEMENTS ---
     const currentDateHeaderEl = document.getElementById('current-date-header');
@@ -171,6 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalCloseButtonEl = document.getElementById('modal-close-button');
     const modalTitleEl = document.getElementById('modal-title');
     const modalBodyEl = document.getElementById('modal-body');
+    const bathroomBreakButtonEl = document.createElement('button'); // Created dynamically
 
     // --- HELPER FUNCTIONS ---
     function getRandomElement(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
@@ -290,7 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (selectedPerson.occupationData.effect) {
                  const gameStateForEffect = { partyMoney, party };
                  selectedPerson.occupationData.effect(gameStateForEffect);
-                 partyMoney = gameStateForEffect.partyMoney; // Update global from modified game state
+                 partyMoney = gameStateForEffect.partyMoney;
                  addLogEntry(`${selectedPerson.name} (${selectedPerson.occupation}) used their skill, affecting party funds.`, "event_positive", true);
             }
             if (!selectedCharacterId && party.length === 1) selectedCharacterId = selectedPerson.id;
@@ -304,9 +308,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (removedPersonIndex > -1) {
             const [removedPerson] = party.splice(removedPersonIndex, 1);
             availableDraftees.push(removedPerson);
-            // Simple reversal for Banker. A more robust system might check a flag on the person or gameState.
             if (removedPerson.occupationData.effect && removedPerson.occupation === "Banker") {
-                partyMoney -= 150; // Assuming the effect was exactly +150
+                partyMoney -= 150;
                 addLogEntry(`Banker ${removedPerson.name} removed, funds adjusted.`, "event", true);
             }
             if (selectedCharacterId === personId) { selectedCharacterId = party.length > 0 ? party[0].id : null; }
@@ -479,13 +482,13 @@ document.addEventListener('DOMContentLoaded', () => {
         consumeResources();
         updateCharacterStatsForDay(isResting);
         party.forEach(member => { if (member.isAlive && member.negativeTraits.some(t => t.passiveEffect === "accident_prone") && Math.random() < 0.03) { if (Math.random() < 0.5 && partyInventory.food > 5) { const lost = getRandomInt(1,2); partyInventory.food = Math.max(0, partyInventory.food - lost); addLogEntry(`${member.name}'s clumsiness lost ${lost} lbs food!`, "event_negative"); } else if (partyInventory.ammo > 0) { partyInventory.ammo = Math.max(0, partyInventory.ammo -1); addLogEntry(`${member.name} fumbled some ammo!`, "event_negative"); } } });
-        if (!isResting && gamePhase === "traveling" && !activeEvent && Math.random() < 0.15) { selectAndTriggerRandomEvent(); }
+        if (!isResting && gamePhase === "traveling" && !activeEvent && !currentRiverCrossing && Math.random() < 0.15) { selectAndTriggerRandomEvent(); }
         updateMainUI();
         checkGameOverConditions();
     }
 
     function travelOneDay() {
-        if (gamePhase !== "traveling" || activeEvent) return;
+        if (gamePhase !== "traveling" || activeEvent || currentRiverCrossing) return;
         if (party.filter(p => p.isAlive).length === 0) { addLogEntry("Cannot travel, everyone is dead.", "info"); return; }
         if ((partyInventory.oxen || 0) <= 0) { addLogEntry("Cannot travel, no oxen.", "info"); return; }
         let milesToday = MILES_PER_DAY_NORMAL;
@@ -500,7 +503,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function restOneDay() {
-        if ((gamePhase !== "traveling" && gamePhase !== "at_landmark") || activeEvent) return;
+        if ((gamePhase !== "traveling" && gamePhase !== "at_landmark") || activeEvent || currentRiverCrossing) return;
         addLogEntry("Rested for a day.");
         advanceDay(true);
     }
@@ -511,10 +514,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const newLoc = TRAIL_MAP[currentLocationIndex];
         addLogEntry(`Arrived at ${newLoc.name}. ${newLoc.description}`, "landmark");
         if (newLoc.type === "destination") { gameOver("Congratulations! You reached Oregon City!", true); return; }
-        gamePhase = "at_landmark";
-        let continueBtn = document.getElementById('continue-from-landmark-button');
-        if (!continueBtn && landmarkSpecificActionsEl) { continueBtn = document.createElement('button'); continueBtn.id = 'continue-from-landmark-button'; continueBtn.textContent = 'Continue Journey'; continueBtn.addEventListener('click', handleContinueJourneyFromLandmark); landmarkSpecificActionsEl.appendChild(continueBtn); }
-        else if (continueBtn) { continueBtn.classList.remove('hidden'); }
+        if (newLoc.type === "river_crossing") {
+            gamePhase = "at_landmark";
+            currentRiverCrossing = { ...newLoc, currentDepth: newLoc.depth() };
+            addLogEntry(`Current river depth: ${currentRiverCrossing.currentDepth} feet. Width: ${newLoc.width} feet.`, "event");
+        } else {
+            gamePhase = "at_landmark";
+            currentRiverCrossing = null;
+            let continueBtn = document.getElementById('continue-from-landmark-button');
+            if (continueBtn) continueBtn.classList.remove('hidden'); // Show if already exists
+        }
         updateMainUI();
     }
 
@@ -523,6 +532,74 @@ document.addEventListener('DOMContentLoaded', () => {
         addLogEntry("Continuing the journey...", "event");
         const continueBtn = document.getElementById('continue-from-landmark-button');
         if (continueBtn) continueBtn.classList.add('hidden');
+        updateMainUI();
+    }
+
+    // --- RIVER CROSSING LOGIC ---
+    function renderRiverCrossingOptions() {
+        if (!currentRiverCrossing) return;
+        eventChoicesAreaEl.innerHTML = `<h4>${currentRiverCrossing.name} (Depth: ${currentRiverCrossing.currentDepth} ft, Width: ${currentRiverCrossing.width} ft)</h4>`;
+        const optionsDiv = document.createElement('div');
+        const fordButton = document.createElement('button'); fordButton.textContent = `Attempt to Ford`; fordButton.addEventListener('click', () => resolveRiverCrossing('ford')); optionsDiv.appendChild(fordButton);
+        const caulkButton = document.createElement('button'); caulkButton.textContent = "Caulk wagon and float"; caulkButton.addEventListener('click', () => resolveRiverCrossing('caulk')); optionsDiv.appendChild(caulkButton);
+        if (currentRiverCrossing.ferryCost) { const ferryButton = document.createElement('button'); ferryButton.textContent = `Take Ferry ($${currentRiverCrossing.ferryCost.toFixed(2)})`; if (partyMoney < currentRiverCrossing.ferryCost) { ferryButton.disabled = true; ferryButton.title = "Not enough money."; } ferryButton.addEventListener('click', () => resolveRiverCrossing('ferry')); optionsDiv.appendChild(ferryButton); }
+        const waitButton = document.createElement('button'); waitButton.textContent = "Wait a day"; waitButton.addEventListener('click', () => resolveRiverCrossing('wait')); optionsDiv.appendChild(waitButton);
+        eventChoicesAreaEl.appendChild(optionsDiv);
+        eventChoicesAreaEl.classList.remove('hidden');
+    }
+
+    function resolveRiverCrossing(choice) {
+        if (!currentRiverCrossing) return;
+        addLogEntry(`Chosen to ${choice} the ${currentRiverCrossing.name}.`, "event");
+        eventChoicesAreaEl.innerHTML = ''; eventChoicesAreaEl.classList.add('hidden');
+        let timeTakenDays = 0.2, success = true, itemsLost = [], peopleInjured = [];
+        switch (choice) {
+            case 'ford':
+                timeTakenDays = 0.3 + (currentRiverCrossing.width / 2000);
+                const fordDifficulty = currentRiverCrossing.currentDepth * (currentRiverCrossing.width / 500) + (partyInventory.oxen < 2 ? 10 : 0); // Harder with fewer oxen
+                if (Math.random() * 100 < fordDifficulty) {
+                    success = false; addLogEntry("Failed to ford! Wagon swamped!", "event_negative");
+                    if (Math.random() < 0.5) {partyInventory.food = Math.max(0, partyInventory.food - getRandomInt(20, 50)); itemsLost.push("food");}
+                    if (Math.random() < 0.3) {partyInventory.clothing = Math.max(0, partyInventory.clothing - 1); itemsLost.push("clothing");}
+                    if (Math.random() < 0.2 && partyInventory.oxen > 0) {partyInventory.oxen--; itemsLost.push("an ox");}
+                    party.forEach(p => { if (p.isAlive && Math.random() < 0.15) { p.health = Math.max(0, p.health - getRandomInt(10,30)); p.hygiene=Math.max(0, p.hygiene-20); peopleInjured.push(p.name);} });
+                } else { addLogEntry("Successfully forded.", "event_positive"); party.forEach(p => p.hygiene = Math.max(0, p.hygiene - 10)); }
+                break;
+            case 'caulk':
+                timeTakenDays = 0.5 + (currentRiverCrossing.width / 1500);
+                if (currentRiverCrossing.currentDepth > 6 || Math.random() < 0.25) {
+                    success = false; addLogEntry("Wagon took on water or capsized!", "event_negative");
+                    if (Math.random() < 0.7) {partyInventory.food = Math.max(0, partyInventory.food - getRandomInt(30, 80)); itemsLost.push("food");}
+                    if (Math.random() < 0.5) {partyInventory.clothing = Math.max(0, partyInventory.clothing - getRandomInt(1,2)); itemsLost.push("clothing");}
+                    if (Math.random() < 0.4) {partyInventory.ammo = Math.max(0, partyInventory.ammo - getRandomInt(1,3)); itemsLost.push("ammo");}
+                    party.forEach(p => { if (p.isAlive && Math.random() < 0.25) { p.health = Math.max(0, p.health - getRandomInt(15,40)); p.hygiene=Math.max(0, p.hygiene-30); peopleInjured.push(p.name); if(Math.random() < 0.05 && !p.positiveTraits.some(t => t.id === "tough")) {p.isAlive=false; addLogEntry(`${p.name} drowned!`, "death");}} });
+                } else { addLogEntry("Successfully floated across.", "event_positive"); }
+                break;
+            case 'ferry':
+                if (partyMoney >= currentRiverCrossing.ferryCost) { partyMoney -= currentRiverCrossing.ferryCost; timeTakenDays = 0.1 + (currentRiverCrossing.width / 3000); addLogEntry(`Paid $${currentRiverCrossing.ferryCost.toFixed(2)} for ferry. Smooth crossing.`, "event_positive"); updateHeaderStatus(); }
+                else { addLogEntry("Cannot afford ferry!", "warning"); success = false; timeTakenDays = 0; }
+                break;
+            case 'wait':
+                timeTakenDays = 1.0; addLogEntry("Waited a day by the river.", "event");
+                const oldDepth = currentRiverCrossing.currentDepth;
+                currentRiverCrossing.currentDepth = Math.max(1, currentRiverCrossing.currentDepth - getRandomInt(0, (currentRiverCrossing.currentDepth > 3 ? 2 : 1) ));
+                if(currentRiverCrossing.currentDepth < oldDepth) addLogEntry(`River seems shallower: ${currentRiverCrossing.currentDepth} ft.`, "event_positive");
+                else addLogEntry(`River depth unchanged: ${currentRiverCrossing.currentDepth} ft.`, "event");
+                success = false; // Did not attempt crossing
+                break;
+        }
+        if (timeTakenDays > 0) { if (choice !== 'wait') { addLogEntry(`Crossing attempt took ~${Math.round(timeTakenDays * 24)} hours.`, "event");} advanceDay(choice === 'wait' || !success); } // Advance day if waited or failed (staying implies a day spent)
+        if (itemsLost.length > 0) addLogEntry(`Lost: ${itemsLost.join(', ')}.`, "event_negative");
+        if (peopleInjured.length > 0) addLogEntry(`Injured: ${peopleInjured.join(', ')}.`, "event_negative");
+        if (success && choice !== 'wait') { currentRiverCrossing = null; gamePhase = "traveling"; addLogEntry("On the other side of the river.", "event_positive"); }
+        updateMainUI();
+    }
+
+    // --- BATHROOM BREAK INTERACTION ---
+    function handleBathroomBreak() {
+        if (gamePhase !== "traveling" || activeEvent || currentRiverCrossing) { addLogEntry("Cannot take a break now.", "info"); return; }
+        addLogEntry("Party takes a short break to relieve themselves.", "event");
+        party.forEach(member => { if (member.isAlive) { member.bowelUrgency = Math.max(0, member.bowelUrgency - getRandomInt(60, 90)); member.bladderUrgency = Math.max(0, member.bladderUrgency - getRandomInt(70, 100)); member.hygiene = Math.max(0, member.hygiene + (member.hygiene < 50 ? -5 : 5)); member.energy = Math.max(0, member.energy - 2); } });
         updateMainUI();
     }
 
@@ -537,14 +614,16 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const event of possibleEvents) { if (randomNum < event.weight) { addLogEntry(`Event: ${event.message}`, "event_title"); event.trigger(gameState); updateMainUI(); return; } randomNum -= event.weight; }
     }
     function triggerDiseaseOutbreak(gameState) { let affectedCount = 0; const avgHygiene = gameState.averageHygiene; const baseSickChance = avgHygiene < 30 ? 0.4 : (avgHygiene < 50 ? 0.25 : 0.1); gameState.party.forEach(member => { if (member.isAlive && !member.sickness && Math.random() < baseSickChance) { const outbreakDiseases = ["Cholera", "Dysentery"]; const diseaseToContract = getRandomElement(outbreakDiseases); applyDisease(member, diseaseToContract); affectedCount++; } }); if (affectedCount === 0) { addLogEntry("Party avoided widespread sickness.", "event"); } else { addLogEntry(`${affectedCount} member(s) fell ill.`, "event_negative"); } }
-    function triggerHuntingOpportunity(gameState) { activeEvent = { type: "hunting_ground", partyHasHunter: party.some(p => p.isAlive && (p.occupationData.passiveEffect === "hunting_bonus_occupation" || p.positiveTraits.some(t=>t.passiveEffect==="hunting_bonus_trait"))) }; if (confirm("Found hunting ground. Hunt? (1 day, ammo)")) { resolveHunting(true, gameState); } else { addLogEntry("Decided not to hunt.", "event"); activeEvent = null; updateMainUI(); } }
-    function resolveHunting(didHunt, gameState) { if (didHunt) { if ((gameState.partyInventory.ammo || 0) < 1) { addLogEntry("No ammo left to hunt!", "warning"); activeEvent = null; updateMainUI(); return; } gameState.partyInventory.ammo--; currentDate.setDate(currentDate.getDate() + 1); consumeResources(); party.forEach(member => { if(member.isAlive) { member.energy = Math.max(0, member.energy - ENERGY_COST_PER_TRAVEL_DAY * 1.2); member.hygiene = Math.max(0, member.hygiene - HYGIENE_LOSS_PER_DAY); } }); let successChance = 0.3; if (activeEvent.partyHasHunter) successChance += 0.3; if (Math.random() < successChance) { const foodGained = getRandomInt(40, 120); gameState.partyInventory.food = (gameState.partyInventory.food || 0) + foodGained; addLogEntry(`Successful hunt! Gained ${foodGained} lbs food.`, "event_positive"); } else { addLogEntry("Hunt unsuccessful.", "event_negative"); } } activeEvent = null; updateMainUI(); }
-    function triggerRestSpot(gameState, spotName, bonuses) { activeEvent = { type: "rest_spot", spotName, bonuses }; if (confirm(`Found ${spotName}. Rest here for enhanced recovery? (1 day)`)) { resolveRestSpot(true, gameState); } else { addLogEntry(`Decided not to rest at ${spotName}.`, "event"); activeEvent = null; updateMainUI(); } }
-    function resolveRestSpot(didRest, gameState) { if (didRest) { addLogEntry(`Rested at ${activeEvent.spotName}.`, "event_positive"); advanceDay(true); } activeEvent = null; updateMainUI(); }
+    function triggerHuntingOpportunity(gameState) { activeEvent = { type: "hunting_ground", partyHasHunter: party.some(p => p.isAlive && (p.occupationData.passiveEffect === "hunting_bonus_occupation" || p.positiveTraits.some(t=>t.passiveEffect==="hunting_bonus_trait"))) }; eventChoicesAreaEl.innerHTML = `<p>You've found a promising hunting ground.</p><button id="hunt-yes">Hunt (1 day, ammo)</button> <button id="hunt-no">Ignore</button>`; eventChoicesAreaEl.classList.remove('hidden'); document.getElementById('hunt-yes').addEventListener('click', () => {resolveHunting(true, gameState); cleanupEventUI();}); document.getElementById('hunt-no').addEventListener('click', () => {addLogEntry("Decided not to hunt.", "event"); cleanupEventUI();}); }
+    function resolveHunting(didHunt, gameState) { if (didHunt) { if ((gameState.partyInventory.ammo || 0) < 1) { addLogEntry("No ammo left to hunt!", "warning"); return; } gameState.partyInventory.ammo--; currentDate.setDate(currentDate.getDate() + 1); consumeResources(); party.forEach(member => { if(member.isAlive) { member.energy = Math.max(0, member.energy - ENERGY_COST_PER_TRAVEL_DAY * 1.2); member.hygiene = Math.max(0, member.hygiene - HYGIENE_LOSS_PER_DAY); } }); let successChance = 0.3; if (activeEvent.partyHasHunter) successChance += 0.3; party.forEach(p=>{if(p.isAlive && p.positiveTraits.some(t=>t.passiveEffect==="hunting_bonus_trait")) successChance+=0.15;}); if (Math.random() < successChance) { const foodGained = getRandomInt(40, 120); gameState.partyInventory.food = (gameState.partyInventory.food || 0) + foodGained; addLogEntry(`Successful hunt! Gained ${foodGained} lbs food.`, "event_positive"); } else { addLogEntry("Hunt unsuccessful.", "event_negative"); } } }
+    function triggerRestSpot(gameState, spotName, bonuses) { activeEvent = { type: "rest_spot", spotName, bonuses }; eventChoicesAreaEl.innerHTML = `<p>You found ${spotName}.</p><button id="restspot-yes">Rest here (1 day)</button> <button id="restspot-no">Continue</button>`; eventChoicesAreaEl.classList.remove('hidden'); document.getElementById('restspot-yes').addEventListener('click', () => {resolveRestSpot(true, gameState); cleanupEventUI();}); document.getElementById('restspot-no').addEventListener('click', () => {addLogEntry(`Decided not to rest at ${spotName}.`, "event"); cleanupEventUI();}); }
+    function resolveRestSpot(didRest, gameState) { if (didRest) { addLogEntry(`Rested at ${activeEvent.spotName}.`, "event_positive"); advanceDay(true); } }
+    function cleanupEventUI() { activeEvent = null; eventChoicesAreaEl.innerHTML = ''; eventChoicesAreaEl.classList.add('hidden'); updateMainUI(); }
+
 
     // --- MODAL ---
     function openModal(title, contentHtml, isCancellable = true) { modalTitleEl.textContent = title; modalBodyEl.innerHTML = contentHtml; modalCloseButtonEl.style.display = isCancellable ? 'block' : 'none'; modalOverlayEl.classList.remove('hidden'); }
-    function closeModal() { modalOverlayEl.classList.add('hidden'); modalBodyEl.innerHTML = ''; if (activeEvent && activeEvent.onClose) { activeEvent.onClose(); } activeEvent = null; updateMainUI(); }
+    function closeModal() { modalOverlayEl.classList.add('hidden'); modalBodyEl.innerHTML = ''; if (activeEvent && activeEvent.onClose) { activeEvent.onClose(); } if(!currentRiverCrossing) activeEvent = null; updateMainUI(); }
 
     // --- INVENTORY & MAP ---
     function renderPartyInventoryDetailed() { partyInventoryDetailedEl.innerHTML = ''; const ul = document.createElement('ul'); let hasItems = false; for (const itemId in partyInventory) { if (partyInventory[itemId] > 0) { hasItems = true; const supplyDetails = GAME_SUPPLIES.find(s => s.id === itemId); if (supplyDetails) { const li = document.createElement('li'); li.textContent = `${supplyDetails.name}: ${partyInventory[itemId]} ${supplyDetails.unit.split(' ')[0]}${partyInventory[itemId] > 1 && !supplyDetails.unit.includes('(') ? 's' : ''}`; ul.appendChild(li); } } } if (!hasItems) { partyInventoryDetailedEl.innerHTML = "<p>Your wagon is empty.</p>"; } else { partyInventoryDetailedEl.appendChild(ul); } }
@@ -552,39 +631,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- GAME OVER & COMPLAINTS ---
     function checkGameOverConditions() { if (gamePhase === "game_over") return; if (party.filter(p => p.isAlive).length === 0) { gameOver("All party members have perished."); } else if ((partyInventory.oxen || 0) <= 0 && TRAIL_MAP[currentLocationIndex + 1]) { gameOver("Wagon cannot move without oxen."); } }
-    function gameOver(message, isVictory = false) { if (gamePhase === "game_over") return; gamePhase = "game_over"; addLogEntry(message, isVictory ? "victory" : "gameover"); travelDayButtonEl.disabled = true; restDayButtonEl.disabled = true; landmarkSpecificActionsEl.classList.add('hidden'); eventChoicesAreaEl.classList.add('hidden'); openModal(isVictory ? "Victory!" : "Game Over", `<p>${message}</p><p>Refresh page to play again.</p>`, false); }
+    function gameOver(message, isVictory = false) { if (gamePhase === "game_over") return; gamePhase = "game_over"; addLogEntry(message, isVictory ? "victory" : "gameover"); travelDayButtonEl.disabled = true; restDayButtonEl.disabled = true; landmarkSpecificActionsEl.classList.add('hidden'); eventChoicesAreaEl.classList.add('hidden'); bathroomBreakButtonEl.classList.add('hidden'); openModal(isVictory ? "Victory!" : "Game Over", `<p>${message}</p><p>Refresh page to play again.</p>`, false); }
     function generateComplaints() {
-        if (complaintCooldown > 0 || activeEvent) return;
+        if (complaintCooldown > 0 || activeEvent || currentRiverCrossing) return;
         let complaintMadeThisTurn = false;
-        const livingPartyMembers = party.filter(p => p.isAlive);
+        const livingPartyMembers = party.filter(p => p.isAlive); if (livingPartyMembers.length === 0) return;
         const partyHasAdequateClothing = (partyInventory.clothing || 0) >= livingPartyMembers.length;
-
         livingPartyMembers.forEach(member => {
-            if (Math.random() > 0.4) return;
-            let complaint = null;
-            if (member.sickness) {
-                if (member.sickness.name === "Dysentery" && member.bowelUrgency > 50) complaint = `${member.name}: "This Dysentery is unbearable... I need to go, urgently!"`;
-                else if (member.sickness.name === "Bladder Infection" && member.bladderUrgency > 50) complaint = `${member.name}: "My bladder... this infection is torture. I need relief!"`;
-                else if (member.sickness.name === "Cholera") complaint = `${member.name}: "I feel so weak from this Cholera... everything hurts."`;
-            }
-            if (!complaint) {
-                if (member.bowelUrgency > 85) complaint = `${member.name}: "I REALLY need to find a spot... My stomach is killing me!"`;
-                else if (member.bowelUrgency > 60) complaint = `${member.name}: "My stomach's been rumbling all day. I need to go soon."`;
-                else if (member.bladderUrgency > 85) complaint = `${member.name}: "I can't hold it much longer! Please, we need to stop!"`;
-                else if (member.bladderUrgency > 60) complaint = `${member.name}: "I'm starting to get quite uncomfortable... need to pee."`;
-            }
-            if (!complaint) {
-                if (member.health < 30) complaint = `${member.name}: "I feel like I'm fading... so weak."`;
-                else if (member.energy < 20) complaint = `${member.name}: "I'm utterly exhausted. I can barely put one foot in front of the other."`;
-                else if (member.hygiene < 25) complaint = `${member.name}: "I reek! We all do! Can't we at least wash up a bit?"`;
-                else if (!partyHasAdequateClothing && member.hygiene < 50) complaint = `${member.name}: "These rags are barely clothes! I'm freezing and filthy."`;
-                else if (!partyHasAdequateClothing && member.health < 70) complaint = `${member.name}: "Without proper clothes, this journey is taking its toll on me."`;
-            }
+            if (Math.random() > COMPLAINT_BASE_CHANCE) return;
+            let complaint = null, priority = 0;
+            if (member.sickness) { if (member.sickness.name === "Dysentery" && member.bowelUrgency > 40) { complaint = `${member.name}: "This Dysentery... I feel awful and need to go again!"`; priority = 10; } else if (member.sickness.name === "Bladder Infection" && member.bladderUrgency > 40) { complaint = `${member.name}: "My bladder is killing me with this infection!"`; priority = 10; } else if (member.sickness.name === "Cholera" && member.health < 50) { complaint = `${member.name}: "So weak... this Cholera is draining everything."`; priority = 9; } }
+            if (!complaint) { if (member.bowelUrgency > 90 && priority < 8) { complaint = `${member.name}: "I absolutely MUST find a spot! NOW!"`; priority = 8; } else if (member.bowelUrgency > 70 && priority < 5) { complaint = `${member.name}: "My stomach isn't going to last much longer..."`; priority = 5; } if (member.bladderUrgency > 90 && priority < 8) { complaint = `${member.name}: "I'm about to burst! We have to stop!"`; priority = 8; } else if (member.bladderUrgency > 70 && priority < 5) { complaint = `${member.name}: "Seriously, I need to relieve myself soon."`; priority = 5; } }
+            if (!complaint) { if (member.health < 25 && priority < 7) { complaint = `${member.name}: "I don't think I can go on much further..."`; priority = 7; } else if (member.energy < 15 && priority < 6) { complaint = `${member.name}: "Just... so... tired... Need to rest."`; priority = 6; } else if (member.hygiene < 20 && priority < 4) { complaint = `${member.name}: "I smell like something died. We all do!"`; priority = 4; } else if (!partyHasAdequateClothing && member.hygiene < 40 && priority < 3) { complaint = `${member.name}: "These clothes are falling apart! I'm covered in grime."`; priority = 3; } else if (!partyHasAdequateClothing && member.health < 60 && priority < 3) { complaint = `${member.name}: "This cold is seeping into my bones without proper clothes."`; priority = 3; } }
+            if (distanceTraveledOnLeg < MILES_PER_DAY_NORMAL / 2 && Math.random() < 0.1 && priority < 2) { complaint = `${member.name}: "Are we even moving? This is taking forever."`; priority = 1; } else if (Math.random() < 0.05 && priority < 1) { complaint = `${member.name}: "Another day, another mile of dust. Is this ever going to end?"`; priority = 1; }
             if (complaint) { addLogEntry(complaint, "complaint"); complaintMadeThisTurn = true; }
         });
-        if ((partyInventory.food || 0) < livingPartyMembers.length * 3 && Math.random() < 0.4) { const rm = getRandomElement(livingPartyMembers); if (rm) { addLogEntry(`${rm.name}: "We're going to starve if we don't find food soon!"`, "complaint"); complaintMadeThisTurn = true; } }
-        if (!partyHasAdequateClothing && livingPartyMembers.length > 0 && Math.random() < 0.25) { const rm = getRandomElement(livingPartyMembers); if (rm) { addLogEntry(`${rm.name}: "We need more clothes for everyone, or we'll all fall ill from exposure!"`, "complaint"); complaintMadeThisTurn = true; } }
-        if (complaintMadeThisTurn) complaintCooldown = 3; else if (complaintCooldown > 0) complaintCooldown--;
+        if ((partyInventory.food || 0) < livingPartyMembers.length * 2 && Math.random() < 0.5) { const rm = getRandomElement(livingPartyMembers); if (rm) { addLogEntry(`${rm.name}: "If we don't get food, this is it for us!"`, "complaint"); complaintMadeThisTurn = true; } }
+        if (!partyHasAdequateClothing && livingPartyMembers.length > 0 && Math.random() < 0.3) { const rm = getRandomElement(livingPartyMembers); if (rm) { addLogEntry(`${rm.name}: "We're all going to freeze or get sick without better clothes!"`, "complaint"); complaintMadeThisTurn = true; } }
+        if (complaintMadeThisTurn) complaintCooldown = 2; else if (complaintCooldown > 0) complaintCooldown--;
     }
     function applyDisease(person, diseaseName) { if (person.sickness) return; const diseaseData = DISEASES[diseaseName]; if (diseaseData) { person.sickness = { name: diseaseName, daysSick: 0, duration: diseaseData.duration(), definition: diseaseData }; addLogEntry(`${person.name} contracted ${diseaseName}!`, "sickness"); } }
 
@@ -595,13 +659,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentLoc = TRAIL_MAP[currentLocationIndex]; const nextLoc = TRAIL_MAP[currentLocationIndex + 1];
         if (nextLoc) { nextLandmarkNameEl.textContent = nextLoc.name; distanceToNextEl.textContent = `${Math.max(0, currentLoc.distanceToNext - distanceTraveledOnLeg)} miles`; }
         else { nextLandmarkNameEl.textContent = "Journey's End!"; distanceToNextEl.textContent = "0 miles"; }
-        const isAtLandmark = gamePhase === "at_landmark"; const showTravelButtons = gamePhase === "traveling" && !activeEvent;
+        const isAtLandmark = gamePhase === "at_landmark";
+        const showTravelButtons = gamePhase === "traveling" && !activeEvent && !currentRiverCrossing;
         travelDayButtonEl.classList.toggle('hidden', !showTravelButtons); travelDayButtonEl.disabled = !showTravelButtons;
-        restDayButtonEl.classList.toggle('hidden', (!showTravelButtons && !isAtLandmark) || activeEvent); restDayButtonEl.disabled = (!showTravelButtons && !isAtLandmark) || activeEvent;
-        landmarkSpecificActionsEl.classList.toggle('hidden', !isAtLandmark || activeEvent);
-        if (isAtLandmark) { visitStoreButtonEl.classList.toggle('hidden', !(currentLoc.services?.some(s => s.startsWith("shop_")))); const contBtn = document.getElementById('continue-from-landmark-button'); if (contBtn) contBtn.classList.remove('hidden');}
-        else { const contBtn = document.getElementById('continue-from-landmark-button'); if (contBtn) contBtn.classList.add('hidden'); }
-        eventChoicesAreaEl.classList.toggle('hidden', !activeEvent);
+        restDayButtonEl.classList.toggle('hidden', (!showTravelButtons && !isAtLandmark) || activeEvent || currentRiverCrossing); restDayButtonEl.disabled = (!showTravelButtons && !isAtLandmark) || activeEvent || currentRiverCrossing;
+        const highUrgency = party.some(p => p.isAlive && (p.bowelUrgency > 70 || p.bladderUrgency > 70));
+        bathroomBreakButtonEl.classList.toggle('hidden', !(showTravelButtons || (isAtLandmark && !currentRiverCrossing))); // Show if traveling or at non-river landmark
+        bathroomBreakButtonEl.disabled = !(highUrgency || isResting); // Concept of isResting needs to be available or rethought for enabling this button
+
+        landmarkSpecificActionsEl.classList.toggle('hidden', !isAtLandmark || activeEvent || currentRiverCrossing);
+        if (isAtLandmark && !currentRiverCrossing) { visitStoreButtonEl.classList.toggle('hidden', !(currentLoc.services?.some(s => s.startsWith("shop_")))); const contBtn = document.getElementById('continue-from-landmark-button'); if (contBtn) contBtn.classList.remove('hidden');}
+        else if (!currentRiverCrossing) { const contBtn = document.getElementById('continue-from-landmark-button'); if (contBtn) contBtn.classList.add('hidden'); }
+        eventChoicesAreaEl.classList.toggle('hidden', !activeEvent && !currentRiverCrossing); // Show if active event OR river crossing
+        if(currentRiverCrossing && !activeEvent) renderRiverCrossingOptions(); // If at river, show its options
+
         renderPartyInventoryDetailed(); renderMapLandmarkList(); generateComplaints();
     }
 
@@ -617,21 +688,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (shopType && SHOP_INVENTORIES[shopType]) { const storeHtml = `<div class="money-display">Your Money: $<span id="fort-store-money-display">${partyMoney.toFixed(2)}</span></div><div id="fort-supply-list-modal"></div><p id="fort-store-message" style="text-align:center; color:green; margin-top:10px;"></p>`; openModal(`${currentLoc.name} Store`, storeHtml); const fortSupplyListModalEl = document.getElementById('fort-supply-list-modal'); if (fortSupplyListModalEl) { renderSuppliesStoreUI(fortSupplyListModalEl, SHOP_INVENTORIES[shopType], true, 'fort'); } else { console.error("#fort-supply-list-modal not found."); } }
             else { openModal("Store Closed", "<p>No store available here.</p>"); }
         });
+
+        bathroomBreakButtonEl.id = 'bathroom-break-button'; bathroomBreakButtonEl.textContent = 'Take a Break'; bathroomBreakButtonEl.title = 'Allow party to relieve themselves.';
+        const travelActionsDiv = document.getElementById('travel-actions'); if (travelActionsDiv) { travelActionsDiv.appendChild(bathroomBreakButtonEl); bathroomBreakButtonEl.addEventListener('click', handleBathroomBreak); }
+
         let continueBtn = document.getElementById('continue-from-landmark-button');
-        if(!continueBtn && landmarkSpecificActionsEl) { // Create if not exists
-            continueBtn = document.createElement('button');
-            continueBtn.id = 'continue-from-landmark-button';
-            continueBtn.textContent = 'Continue Journey';
-            continueBtn.classList.add('hidden'); // Start hidden
-            continueBtn.addEventListener('click', handleContinueJourneyFromLandmark);
-            landmarkSpecificActionsEl.appendChild(continueBtn);
-        }
+        if(!continueBtn && landmarkSpecificActionsEl) { continueBtn = document.createElement('button'); continueBtn.id = 'continue-from-landmark-button'; continueBtn.textContent = 'Continue Journey'; continueBtn.classList.add('hidden'); continueBtn.addEventListener('click', handleContinueJourneyFromLandmark); landmarkSpecificActionsEl.appendChild(continueBtn); }
 
         modalCloseButtonEl.addEventListener('click', closeModal); modalOverlayEl.addEventListener('click', (e) => { if (e.target === modalOverlayEl) closeModal(); });
         party = []; availableDraftees = []; nextPersonId = 0; partyMoney = STARTING_MONEY;
         GAME_SUPPLIES.forEach(supply => { partyInventory[supply.id] = 0; });
         currentDate = new Date(1848, 3, 1); currentLocationIndex = 0; distanceTraveledOnLeg = 0;
-        complaintCooldown = 0; selectedCharacterId = null; activeEvent = null; gamePhase = "setup";
+        complaintCooldown = 0; selectedCharacterId = null; activeEvent = null; currentRiverCrossing = null; gamePhase = "setup";
         if(gameLogEl) gameLogEl.innerHTML = '<p>Welcome! Assemble your party and prepare for the journey.</p>';
         if(maxPartySizeDisplayEl) maxPartySizeDisplayEl.textContent = MAX_PARTY_SIZE;
         for (let i = 0; i < NUM_DRAFTEES_TO_GENERATE; i++) availableDraftees.push(generateRandomPerson());
